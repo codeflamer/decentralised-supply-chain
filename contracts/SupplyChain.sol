@@ -14,6 +14,7 @@ contract SupplyChain {
         string productName;
         address[] owners;
         bool available;
+        uint price;
     }
 
     //mappings
@@ -27,12 +28,13 @@ contract SupplyChain {
         companyName = _companyName;
     }
 
-    function addProduct(uint _productId,string memory _productName) public {
+    function addProduct(uint _productId,string memory _productName,uint _price) public {
         Product storage product  = products[_productName][_productId];
         product.productId = _productId;
         product.productName = _productName;
         product.available = true;
         product.owners.push(msg.sender);
+        product.price = _price*1e18;
         idsProduct[_productName].push(_productId);
         emit addedProduct(_productId,_productName);
     }
@@ -47,4 +49,10 @@ contract SupplyChain {
     function getIdsProduct(string memory _productName) public view returns(uint[] memory){
         return idsProduct[_productName];
     }
+
+    function getProductPrice(uint _productId,string memory _productName) public view returns(uint){
+        return products[_productName][_productId].price;
+    }
+
+
 }
