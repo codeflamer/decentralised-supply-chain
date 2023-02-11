@@ -2,7 +2,7 @@
 pragma solidity ^0.8.9;
 
 // Uncomment this line to use console.log
-// import "hardhat/console.sol";
+ import "hardhat/console.sol";
 
 contract SupplyChain {
     //variables
@@ -84,6 +84,29 @@ contract SupplyChain {
 
     function getProductPrice(uint _productId,string memory _productName) public view returns(uint){
         return products[_productName][_productId].price;
+    }
+
+    //write Test
+    function getProductPresentOwner(string memory _productName,uint _productId) view public returns(address ){
+         Product memory product = products[_productName][_productId];
+         return getProductOwners(_productId,_productName)[product.owners.length-1];
+    }
+
+    function getAllProductIdsForAnAddress(address _ownerAddress,string memory _productName) view public returns(uint[] memory){
+        uint[] storage ids =  idsProduct[_productName];
+        uint[] memory IdsOwner = new uint[](ids.length);
+        uint counter = 0;
+        for(uint i = 0; i < ids.length;i++){
+            if(getProductPresentOwner(_productName,ids[i]) == _ownerAddress){
+                IdsOwner[counter] = ids[i];
+                counter++;
+            }
+        }
+        uint[] memory trimmedResult = new uint[](counter);
+        for (uint j = 0; j < trimmedResult.length; j++) {
+            trimmedResult[j] = IdsOwner[j];
+        }
+        return trimmedResult;
     }
 
 

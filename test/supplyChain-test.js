@@ -40,6 +40,24 @@ describe("SupplyChain", function () {
         .to.emit(supplyChain, "addedProduct")
         .withArgs(1, "iphone13");
     });
+
+    it("Should get Present owner of a product", async () => {
+      const { supplyChain, buyer, producer } = await loadFixture(
+        deploySupplyChain
+      );
+      await supplyChain.addProduct(1, "iphone13", 20);
+      const presentOwner = await supplyChain.getProductPresentOwner(
+        "iphone13",
+        1
+      );
+      assert.equal(presentOwner, producer.address);
+      await supplyChain
+        .connect(buyer)
+        .buyProduct("iphone13", 1, { value: ethers.utils.parseEther("21") });
+      const newOwner = await supplyChain.getProductPresentOwner("iphone13", 1);
+      assert.equal(newOwner, buyer.address);
+    });
+
     it("Should be able to get a product, and confirm the exact type of product with the prototype", async function () {
       const { producer, supplyChain, addedProduct1 } = await loadFixture(
         deploySupplyChain
@@ -195,6 +213,38 @@ describe("SupplyChain", function () {
           .changePrice(addedProduct1.productName, addedProduct1.productId, 40)
       ).to.be.revertedWith("You are not the owner of this product");
     });
+
+    it("Should be able to get all ids of a product belonging to an address", async () => {
+      const { supplyChain, producer, buyer } = await loadFixture(
+        deploySupplyChain
+      );
+      await supplyChain.addProduct(1, "iphone13", 20);
+      await supplyChain.addProduct(2, "iphone13", 20);
+      await supplyChain.addProduct(5, "iphone13", 20);
+
+      const producerIdsBeforeSale =
+        await supplyChain.getAllProductIdsForAnAddress(
+          producer.address,
+          "iphone13"
+        );
+      assert(producerIdsBeforeSale.toString(), [1, 2, 5].toString());
+
+      await supplyChain
+        .connect(buyer)
+        .buyProduct("iphone13", 1, { value: ethers.utils.parseEther("21") });
+
+      const producerIdsAfterSale =
+        await supplyChain.getAllProductIdsForAnAddress(
+          producer.address,
+          "iphone13"
+        );
+      assert(producerIdsAfterSale.toString(), [2, 5].toString());
+      const buyerIds = await supplyChain
+        .connect(buyer)
+        .getAllProductIdsForAnAddress(buyer.address, "iphone13");
+
+      assert(buyerIds.toString(), [1].toString());
+    });
   });
 
   describe("Buying of product", function () {
@@ -202,6 +252,7 @@ describe("SupplyChain", function () {
       const { supplyChain, producer, buyer } = await loadFixture(
         deploySupplyChain
       );
+      await supplyChain.addProduct(1, "iphone13", 20);
 
       //connect new user to buy
       const balancePrevOwnerBefore = await producer.getBalance();
@@ -265,7 +316,7 @@ describe("SupplyChain", function () {
       ).to.be.revertedWith("Product not available for sale");
     });
 
-    it.only("After transfer of ownership, should revert when the producer tries to edit the product", async () => {
+    it("After transfer of ownership, should revert when the producer tries to edit the product", async () => {
       const { supplyChain, buyer } = await loadFixture(deploySupplyChain);
 
       await supplyChain.addProduct(1, "iphone13", 20);
@@ -283,8 +334,26 @@ describe("SupplyChain", function () {
       ).to.be.revertedWith("You are not the owner of this product");
     });
 
-    // it("buyer should be able to buy in bulk", () => {});
+    it("New owner should be able to edit product details", async () => {
+      const { supplyChain, buyer } = await loadFixture(deploySupplyChain);
 
-    // it("New owner should be able to edit product details", () => {});
+      await supplyChain.addProduct(1, "iphone13", 20);
+
+      await supplyChain.connect(buyer).buyProduct("iphone13", 1, {
+        value: ethers.utils.parseEther("21.0"),
+      });
+
+      await expect(supplyChain.connect(buyer).changePrice("iphone13", 1, 40))
+        .to.emit(supplyChain, "updatedPrice")
+        .withArgs(1, "iphone13", 40);
+
+      await expect(
+        supplyChain.connect(buyer).changeAvailability("iphone13", 1, false)
+      )
+        .to.emit(supplyChain, "productAvailability")
+        .withArgs(false);
+    });
+
+    // it("buyer should be able to buy in bulk", () => {});
   });
 });
