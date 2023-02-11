@@ -245,6 +245,28 @@ describe("SupplyChain", function () {
 
       assert(buyerIds.toString(), [1].toString());
     });
+
+    it("Should be able to get list of available product ids", async () => {
+      const { supplyChain, producer, buyer } = await loadFixture(
+        deploySupplyChain
+      );
+      await supplyChain.addProduct(1, "iphone13", 20);
+      await supplyChain.addProduct(2, "iphone13", 20);
+      await supplyChain.addProduct(5, "iphone13", 20);
+      await supplyChain.addProduct(6, "iphone13", 20);
+      await supplyChain.addProduct(7, "iphone13", 20);
+
+      await supplyChain.changeAvailability("iphone13", 1, false);
+      await supplyChain.changeAvailability("iphone13", 7, false);
+      await supplyChain.changeAvailability("iphone13", 6, false);
+
+      const availableProducts =
+        await supplyChain.getAvailableProductIdsForAnAddress(
+          producer.address,
+          "iphone13"
+        );
+      assert.equal(availableProducts.toString(), [2, 5].toString());
+    });
   });
 
   describe("Buying of product", function () {
@@ -279,6 +301,19 @@ describe("SupplyChain", function () {
         balancePrevOwnerAfter.sub(balancePrevOwnerBefore).toString(),
         ethers.utils.parseEther("20.0")
       );
+    });
+
+    it("Should be able to buy a product and emit ProductPurchased event", async () => {
+      const { supplyChain, buyer } = await loadFixture(deploySupplyChain);
+      await supplyChain.addProduct(1, "iphone13", 20);
+
+      await expect(
+        supplyChain
+          .connect(buyer)
+          .buyProduct("iphone13", 1, { value: ethers.utils.parseEther("21.0") })
+      )
+        .to.emit(supplyChain, "productPurchased")
+        .withArgs(1, "iphone13");
     });
 
     it("Should revert when the amount paid is not suffient to buy the product", async () => {
@@ -354,6 +389,138 @@ describe("SupplyChain", function () {
         .withArgs(false);
     });
 
-    // it("buyer should be able to buy in bulk", () => {});
+    it("buyer should be able to buy in bulk and emit bulkPurchased event", async () => {
+      const { supplyChain, producer, buyer } = await loadFixture(
+        deploySupplyChain
+      );
+      await supplyChain.addProduct(1, "iphone13", 20);
+      await supplyChain.addProduct(2, "iphone13", 20);
+      await supplyChain.addProduct(3, "iphone13", 20);
+      await supplyChain.addProduct(4, "iphone13", 20);
+      await supplyChain.addProduct(5, "iphone13", 20);
+      await supplyChain.addProduct(6, "iphone13", 20);
+
+      await supplyChain.changeAvailability("iphone13", 1, false);
+
+      const availableProductsIds =
+        await supplyChain.getAvailableProductIdsForAnAddress(
+          producer.address,
+          "iphone13"
+        );
+
+      await expect(
+        supplyChain
+          .connect(buyer)
+          .buyBulkProduct("iphone13", availableProductsIds, {
+            value: ethers.utils.parseEther("150"),
+          })
+      )
+        .emit(supplyChain, "bulkPurchased")
+        .withArgs(availableProductsIds, "iphone13");
+    });
+
+    it("should revert with error when money is not enough to buy in bulk", async () => {
+      const { supplyChain, producer, buyer } = await loadFixture(
+        deploySupplyChain
+      );
+      await supplyChain.addProduct(1, "iphone13", 20);
+      await supplyChain.addProduct(2, "iphone13", 20);
+      await supplyChain.addProduct(3, "iphone13", 20);
+      await supplyChain.addProduct(4, "iphone13", 20);
+      await supplyChain.addProduct(5, "iphone13", 20);
+      await supplyChain.addProduct(6, "iphone13", 20);
+
+      await supplyChain.changeAvailability("iphone13", 1, false);
+
+      const availableProductsIds =
+        await supplyChain.getAvailableProductIdsForAnAddress(
+          producer.address,
+          "iphone13"
+        );
+      await expect(
+        supplyChain
+          .connect(buyer)
+          .buyBulkProduct("iphone13", availableProductsIds, {
+            value: ethers.utils.parseEther("20"),
+          })
+      ).to.be.rejectedWith("Not enough Money to buy these products in bulk");
+    });
+
+    it("Products should be long to new owner after bulk purchase", async () => {
+      const { supplyChain, producer, buyer } = await loadFixture(
+        deploySupplyChain
+      );
+      await supplyChain.addProduct(1, "iphone13", 20);
+      await supplyChain.addProduct(2, "iphone13", 20);
+      await supplyChain.addProduct(3, "iphone13", 20);
+      await supplyChain.addProduct(4, "iphone13", 20);
+      await supplyChain.addProduct(5, "iphone13", 20);
+      await supplyChain.addProduct(6, "iphone13", 20);
+
+      await supplyChain.changeAvailability("iphone13", 1, false);
+
+      const availableProductsIds =
+        await supplyChain.getAvailableProductIdsForAnAddress(
+          producer.address,
+          "iphone13"
+        );
+
+      await supplyChain
+        .connect(buyer)
+        .buyBulkProduct("iphone13", availableProductsIds, {
+          value: ethers.utils.parseEther("150"),
+        });
+
+      const allBuyersProducts = await supplyChain.getAllProductIdsForAnAddress(
+        buyer.address,
+        "iphone13"
+      );
+
+      const allProducerProducts =
+        await supplyChain.getAllProductIdsForAnAddress(
+          producer.address,
+          "iphone13"
+        );
+      assert.equal(allBuyersProducts.toString(), [2, 3, 4, 5, 6].toString());
+      assert.equal(allProducerProducts.toString(), [1].toString());
+    });
+
+    it("Should revert when you try to bulk in bulk with one or all of the ids not available for sale", async () => {
+      const { supplyChain, producer, buyer } = await loadFixture(
+        deploySupplyChain
+      );
+      await supplyChain.addProduct(1, "iphone13", 20);
+      await supplyChain.addProduct(2, "iphone13", 20);
+      await supplyChain.addProduct(3, "iphone13", 20);
+      await supplyChain.addProduct(4, "iphone13", 20);
+      await supplyChain.addProduct(5, "iphone13", 20);
+      await supplyChain.addProduct(6, "iphone13", 20);
+
+      await supplyChain.changeAvailability("iphone13", 1, false);
+      await supplyChain.changeAvailability("iphone13", 2, false);
+      await supplyChain.changeAvailability("iphone13", 3, false);
+
+      await expect(
+        supplyChain.connect(buyer).buyBulkProduct("iphone13", [1, 2, 4, 5, 6], {
+          value: ethers.utils.parseEther("150"),
+        })
+      ).to.be.rejectedWith("Product not available for sale");
+    });
+
+    it("Should revert when an owner tries to buy his products", async () => {
+      const { supplyChain } = await loadFixture(deploySupplyChain);
+      await supplyChain.addProduct(1, "iphone13", 20);
+      await supplyChain.addProduct(2, "iphone13", 20);
+
+      await expect(supplyChain.buyProduct("iphone13", 1)).to.be.rejectedWith(
+        "You already own this product"
+      );
+
+      await expect(
+        supplyChain.buyBulkProduct("iphone13", [1, 2, 4, 5, 6], {
+          value: ethers.utils.parseEther("150"),
+        })
+      ).to.be.rejectedWith("You already own this product");
+    });
   });
 });

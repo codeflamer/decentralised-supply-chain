@@ -25,6 +25,8 @@ contract SupplyChain {
     event addedProduct(uint productId,string ProductName);
     event productAvailability(bool status);
     event updatedPrice(uint productId,string ProductName,uint price);
+    event productPurchased(uint productId,string ProductName);
+    event bulkPurchased(uint[] productIds,string productName);
 
     constructor(string memory _companyName){
         companyName = _companyName;
@@ -42,6 +44,7 @@ contract SupplyChain {
     }
 
     function buyProduct(string memory _productName, uint _productId) payable public {
+        require(getProductPresentOwner(_productName,_productId) != msg.sender,"You already own this product");
         Product storage product = products[_productName][_productId];
         require(product.available,"Product not available for sale");
         require(msg.value >= product.price,"Insufficient amount");
@@ -49,6 +52,7 @@ contract SupplyChain {
         (bool success,) = currentOwner.call{value:product.price}("");
         require(success,"Unable to process the payment");
         product.owners.push(msg.sender);
+        emit productPurchased(_productId,_productName);
     }
 
     function changeAvailability(string memory _productName,uint _productId,bool _status) payable public {
@@ -65,8 +69,17 @@ contract SupplyChain {
         emit updatedPrice(_productId,_productName,_price);
     }
 
-    function buyBulkProduct(string memory _productName,uint[] memory _productids) public {
-
+    //ability to buy in bulk
+    function buyBulkProduct(string memory _productName,uint[] memory _productids) payable public {
+        uint costProducts = 0;
+        for(uint i = 0;i < _productids.length;i++){
+            costProducts += getProduct(_productids[i],_productName).price;
+        }
+        require(msg.value >= costProducts,"Not enough Money to buy these products in bulk");
+          for(uint i = 0;i < _productids.length;i++){
+            buyProduct(_productName,_productids[i]);
+        }
+        emit bulkPurchased(_productids,_productName);
     }
 
 
@@ -98,6 +111,23 @@ contract SupplyChain {
         uint counter = 0;
         for(uint i = 0; i < ids.length;i++){
             if(getProductPresentOwner(_productName,ids[i]) == _ownerAddress){
+                IdsOwner[counter] = ids[i];
+                counter++;
+            }
+        }
+        uint[] memory trimmedResult = new uint[](counter);
+        for (uint j = 0; j < trimmedResult.length; j++) {
+            trimmedResult[j] = IdsOwner[j];
+        }
+        return trimmedResult;
+    }
+
+    function getAvailableProductIdsForAnAddress(address _ownerAddress,string memory _productName) view public returns(uint[] memory){
+        uint[] storage ids =  idsProduct[_productName];
+        uint[] memory IdsOwner = new uint[](ids.length);
+        uint counter = 0;
+        for(uint i = 0; i < ids.length;i++){
+            if((getProductPresentOwner(_productName,ids[i]) == _ownerAddress) && (products[_productName][ids[i]].available == true)){
                 IdsOwner[counter] = ids[i];
                 counter++;
             }
